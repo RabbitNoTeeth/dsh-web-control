@@ -45,13 +45,13 @@
 
 登录有效期默认 **30 天**，由中继 `config.json` 的 `sessionTtlDays`（或环境变量 `DSWC_SESSION_TTL_DAYS`）控制；到期后需要重新登录。调小这个值不会让已经登录的浏览器立刻掉线，旧 Cookie 仍按原来的过期时间有效。
 
-![浏览器端实例列表](ui-instances.png)
+![手机端实例列表](ui-devices.png)
 
 ## 浏览器端：工作区会话树
 
 进入电脑后，会话按 DSH 工作区分组：
 
-![工作区树](ui-console.png)
+![手机端工作区树](ui-chats.png)
 
 - 每个工作区显示名称、路径、会话数量和右侧的 **+**；
 - 点工作区行展开/收起；
@@ -68,7 +68,7 @@
 
 ## 浏览器端：对话
 
-![Markdown 对话](ui-chat.png)
+![手机端 Markdown 对话](ui-chat.png)
 
 - 底部输入框发送消息；
 - 运行中时显示「停止」，可以中断当前回合；

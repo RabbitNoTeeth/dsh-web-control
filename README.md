@@ -4,9 +4,16 @@
 
 v0.2 面向个人自用：中继走普通 HTTP，浏览器用「用户名 + 密码」登录，没有端到端加密。请只在你信任的网络中使用，并设置强密码。
 
-![浏览器端实例列表](docs/ui-instances.png)
-![浏览器端工作区树](docs/ui-console.png)
-![浏览器端 Markdown 对话](docs/ui-chat.png)
+## 界面预览
+
+| 页面 | PC 浏览器 | 手机浏览器 |
+|---|---|---|
+| 登录 | <img src="docs/ui-pc-login.png" alt="PC 浏览器登录页" width="760"> | <img src="docs/ui-login.png" alt="手机浏览器登录页" width="210"> |
+| 设备列表 | <img src="docs/ui-pc-devices.png" alt="PC 浏览器设备列表" width="760"> | <img src="docs/ui-devices.png" alt="手机浏览器设备列表" width="210"> |
+| 工作区与会话 | <img src="docs/ui-pc-chats.png" alt="PC 浏览器工作区会话列表" width="760"> | <img src="docs/ui-chats.png" alt="手机浏览器工作区会话列表" width="210"> |
+| 对话 | <img src="docs/ui-pc-chat.png" alt="PC 浏览器对话页面" width="760"> | <img src="docs/ui-chat.png" alt="手机浏览器对话页面" width="210"> |
+
+> 左列为 PC 端 Web 浏览器效果，右列为手机端浏览器效果；点击图片可查看原图。
 
 ## 功能
 
