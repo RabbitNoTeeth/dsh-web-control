@@ -40,6 +40,7 @@ node server.js
   "username": "admin",
   "password": "change-me",
   "sessionSecret": "",
+  "sessionTtlDays": 30,
   "pluginToken": ""
 }
 ```
@@ -53,6 +54,7 @@ node server.js
 | `username` | string | `"admin"` | `DSWC_USER` | 浏览器端登录用户名 |
 | `password` | string | `"dswc"` | `DSWC_PASSWORD` | 浏览器端登录密码 |
 | `sessionSecret` | string | `""`（每次启动随机） | `DSWC_SECRET` | 浏览器端登录 Cookie 的签名密钥 |
+| `sessionTtlDays` | number | `30` | `DSWC_SESSION_TTL_DAYS` | 浏览器端登录有效期（天） |
 | `pluginToken` | string | `""`（不校验） | `DSWC_PLUGIN_TOKEN` | PC 插件实例连接令牌 |
 
 ### host：监听地址
@@ -92,6 +94,15 @@ node server.js
 - 留空：中继每次重启都会换密钥，浏览器端旧登录全部失效，需要重新登录。
 - 填固定的长随机串（推荐 `openssl rand -hex 32`，至少 32 字节随机）：重启中继后浏览器端保持登录。
 - 修改这个值等价于让所有浏览器重新登录；长度没有硬限制，但越长越随机越好。
+
+### sessionTtlDays：浏览器登录有效期
+
+- 数字，默认 `30`，单位是**天**；可以写小数，例如 `7`、`0.5`（12 小时）、`1.5`（36 小时）。
+- 合法范围：大于 0 且不超过 `3650`；最终写入 Cookie 的有效期至少 60 秒。
+- 同时控制登录 Cookie `dswc_session` 的 `exp` 和 `Max-Age`，浏览器端到期后需要重新登录。
+- **只影响新签发的登录 Cookie**：把有效期改小不会立刻让已经登录的浏览器掉线，旧 Cookie 仍按原过期时间有效；想立即让所有浏览器重新登录，请修改 `sessionSecret`（或清掉浏览器 Cookie）。
+- 它不影响 PC 插件的连接，也不影响 `pluginToken`；和 `sessionSecret` 是两件不同的事：一个决定“登录能保持多久”，一个决定“Cookie 是否被篡改”。
+- 旧配置没有这个字段时按 30 天处理；非法值（0、负数、非数字、超过 3650）会启动失败并指出来源。
 
 ### pluginToken：PC 插件实例令牌
 
@@ -209,6 +220,7 @@ PORT=7801
 DSWC_USER=admin
 DSWC_PASSWORD=换成一个强密码
 DSWC_SECRET=换成一串随机长字符串
+DSWC_SESSION_TTL_DAYS=30
 DSWC_PLUGIN_TOKEN=
 ```
 
@@ -226,6 +238,7 @@ openssl rand -hex 32
 | `DSWC_USER` | `admin` | 浏览器端登录用户名 |
 | `DSWC_PASSWORD` | `dswc` | 浏览器端登录密码；**必须修改** |
 | `DSWC_SECRET` | 每次启动随机 | 会话 Cookie 签名密钥；设置后重启中继浏览器端不用重新登录 |
+| `DSWC_SESSION_TTL_DAYS` | `30` | 浏览器登录有效期（天），可写小数 |
 | `DSWC_PLUGIN_TOKEN` | 空 | 可选的实例连接令牌，设置后 PC 也要填同一个值 |
 
 > 环境变量只是配置文件的后备来源：同名字段在 `config.json` 里存在时以配置文件为准。旧版本的前缀是 `XDCTL_`。改名后中继**只认 `DSWC_`**：升级时把旧 env 文件里的变量名逐个替换，否则会退回默认密码 `dswc`，PC 也会因令牌为空重新登记。另外会话 Cookie 名从 `xd_session` 改成了 `dswc_session`，浏览器端需要重新登录一次。
@@ -363,6 +376,7 @@ curl http://127.0.0.1:7801/healthz
 
 - [ ] 在 `config.json`（或 `DSWC_PASSWORD`）里设置强密码，不要使用默认 `dswc` 或 `change-me`；
 - [ ] 设置 `sessionSecret`（或 `DSWC_SECRET`），让浏览器端登录状态跨重启保留；
+- [ ] 按需设置 `sessionTtlDays`（默认 30 天），控制浏览器登录多久后需要重新登录；
 - [ ] 如非必要不要裸暴露端口；优先 VPN/白名单；
 - [ ] 需要多一层实例校验时设置 `pluginToken`（或 `DSWC_PLUGIN_TOKEN`），并在 PC 上填同一个值；
 - [ ] 给 `config.json` 设 `chmod 600`，真实密码和令牌不要提交到公开仓库；

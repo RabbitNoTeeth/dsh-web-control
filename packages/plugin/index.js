@@ -543,6 +543,8 @@ class RelayClient {
         return this.setReasoning(params)
       case 'session.setModel':
         return this.setModel(params)
+      case 'session.exists':
+        return this.sessionExists(params)
       case 'approval.answer':
         return this.answerApproval(params)
       case 'question.answer':
@@ -788,6 +790,17 @@ class RelayClient {
       model: params.model,
       ...(params.reasoningEffort ? { reasoningEffort: params.reasoningEffort } : {}),
     })
+  }
+
+  async sessionExists(params) {
+    const sessionId = String(params?.sessionId || '')
+    if (!sessionId) throw new Error('缺少 sessionId')
+    const value = await this.ctx.sessionController.list({}, AbortSignal.timeout(10_000))
+    const archived = new Set(this.ctx.get('workspaceRegistry')?.archivedSessionIds ?? [])
+    return {
+      exists: (value.items ?? []).some(item =>
+        item.sessionId === sessionId && item.origin !== 'subagent' && !archived.has(sessionId)),
+    }
   }
 
   async setModel(params) {    const sessionId = String(params?.sessionId || '')

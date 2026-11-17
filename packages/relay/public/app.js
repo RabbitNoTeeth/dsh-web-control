@@ -22,6 +22,7 @@ const state = {
   history: { hasMore: false, oldestSeq: null, loading: false },
   follow: true,
   running: false,
+  sending: false,
   catalog: [],
   defaultSelection: null,
   provider: null,
@@ -31,6 +32,10 @@ const state = {
   permissions: { options: [], defaultPreset: null, loaded: false },
   prompts: new Map(),
   pendingWorkspace: null,
+  routeToken: 0,
+  route: { view: 'devices' },
+  recentSessionId: null,
+  sessionSeed: null,
   pending: new Map(),
   pollTimer: null,
   reconnectTimer: null,
@@ -68,6 +73,55 @@ function show(name) {
   for (const id of ['login', 'instances', 'console']) {
     $(id).classList.toggle('hidden', id !== name)
   }
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function parseRoute() {
+  const raw = location.hash.replace(/^#/, '') || '/'
+  const parts = raw.split('/').filter(Boolean)
+  try {
+    if (parts.length === 0) return { view: 'devices' }
+    if (parts[0] === 'pc' && parts.length === 2) {
+      return { view: 'instance', instanceId: decodeURIComponent(parts[1]) }
+    }
+    if (parts[0] === 'pc' && parts[2] === 's' && parts.length === 4) {
+      return {
+        view: 'session',
+        instanceId: decodeURIComponent(parts[1]),
+        sessionId: decodeURIComponent(parts[3]),
+      }
+    }
+  } catch {
+    return { view: 'unknown' }
+  }
+  return { view: 'unknown' }
+}
+
+function routeHash(route) {
+  if (route?.view === 'session') {
+    return `#/pc/${encodeURIComponent(route.instanceId)}/s/${encodeURIComponent(route.sessionId)}`
+  }
+  if (route?.view === 'instance') {
+    return `#/pc/${encodeURIComponent(route.instanceId)}`
+  }
+  return '#/'
+}
+
+function setRoute(route, options = {}) {
+  const hash = routeHash(route)
+  if (location.hash === hash) {
+    void renderRoute()
+    return
+  }
+  if (options.replace) {
+    history.replaceState(null, '', hash)
+    void renderRoute()
+    return
+  }
+  location.hash = hash
 }
 
 function setConn(text, tone = 'muted') {
@@ -151,10 +205,13 @@ async function api(path, options = {}) {
 
 async function boot() {
   bindEvents()
+  if (!location.hash || location.hash === '#') {
+    history.replaceState(null, '', '#/')
+  }
   try {
     const me = await api('/api/me')
     state.user = me.username
-    showInstances()
+    await renderRoute()
   } catch {
     show('login')
   }
@@ -176,7 +233,7 @@ function bindEvents() {
       })
       state.user = data.username
       $('password').value = ''
-      showInstances()
+      await renderRoute()
     } catch (error) {
       $('login-error').textContent = error.message
     } finally {
@@ -190,15 +247,24 @@ function bindEvents() {
     state.pollTimer = null
     closeConsole()
     state.user = null
+    state.routeToken += 1
+    history.replaceState(null, '', '#/')
     show('login')
     clearInterval(state.pollTimer)
     state.pollTimer = null
   })
 
   $('back').addEventListener('click', () => {
-    if (!$('chat').classList.contains('hidden')) showSessions()
-    else closeConsole()
+    if (state.route.view === 'session') {
+      setRoute({ view: 'instance', instanceId: state.route.instanceId })
+    } else if (state.route.view === 'instance') {
+      setRoute({ view: 'devices' })
+    } else {
+      showInstances()
+    }
   })
+
+  window.addEventListener('hashchange', () => { void renderRoute() })
 
   $('empty-new-chat').addEventListener('click', () => {
     void openNewChat(null)
@@ -222,6 +288,7 @@ function bindEvents() {
     const el = $('input')
     el.style.height = 'auto'
     el.style.height = `${Math.min(el.scrollHeight, 130)}px`
+    updateSendState()
   })
 
   $('input').addEventListener('keydown', event => {
@@ -245,13 +312,101 @@ function bindEvents() {
   })
 }
 
-/* --------------------------------------------------------------- instances */
+async function renderRoute() {
+  const token = ++state.routeToken
+  const route = parseRoute()
+  state.route = route
+  if (!state.user) {
+    show('login')
+    return
+  }
+  if (route.view === 'devices') {
+    await showInstances(token)
+    return
+  }
+  if (route.view === 'unknown') {
+    toast('页面不存在，已回到设备列表')
+    setRoute({ view: 'devices' }, { replace: true })
+    return
+  }
+  try {
+    const item = await ensureInstance(route.instanceId, token)
+    if (!item || token !== state.routeToken) return
+    if (route.view === 'instance') {
+      await showSessionList()
+      return
+    }
+    if (!state.sessions.some(session => session.id === route.sessionId)
+      && state.recentSessionId !== route.sessionId) {
+      const exists = await rpc('session.exists', { sessionId: route.sessionId })
+      if (token !== state.routeToken) return
+      if (!exists.exists) {
+        throw Object.assign(new Error('会话不存在或已归档'), { code: 'missing-session' })
+      }
+    }
+    await openSession(route.sessionId)
+  } catch (error) {
+    if (token !== state.routeToken) return
+    toast(error.message || '打开页面失败', 4000)
+    if (route.view === 'session' && error?.code === 'missing-session') {
+      setRoute({ view: 'instance', instanceId: route.instanceId }, { replace: true })
+    } else {
+      setRoute({ view: 'devices' }, { replace: true })
+    }
+  }
+}
 
-async function showInstances() {
+async function ensureInstance(instanceId, token) {
+  let item = state.instance?.id === instanceId ? state.instance : null
+  if (!item) item = state.instances.find(candidate => candidate.id === instanceId) || null
+  if (!item) {
+    const data = await api('/api/instances')
+    state.instances = data.items || []
+    item = state.instances.find(candidate => candidate.id === instanceId) || null
+  }
+  if (!item) throw new Error('电脑不在线或不存在')
+  if (token !== state.routeToken) return null
+  if (state.instance?.id !== item.id) {
+    openConsole(item)
+  } else {
+    clearInterval(state.pollTimer)
+    state.pollTimer = null
+    show('console')
+    if (!state.ws || state.ws.readyState !== WebSocket.OPEN) connect()
+  }
+  const connected = await waitConnected(token)
+  if (!connected) return null
+  await loadSessions()
+  if (token !== state.routeToken) return null
+  return item
+}
+
+async function waitConnected(token) {
+  const deadline = Date.now() + 10_000
+  while (!state.clientId) {
+    if (token !== state.routeToken) return false
+    if (Date.now() > deadline) throw new Error('连接电脑超时')
+    await sleep(100)
+  }
+  return true
+}
+
+async function showSessionList() {
+  if (state.sessionId) {
+    await showSessions()
+    return
+  }
+  $('chat').classList.add('hidden')
+  $('session-list-wrap').classList.remove('hidden')
+  await loadSessions()
+}
+
+async function showInstances(expectedToken = null) {
   show('instances')
   closeSocket()
   state.instance = null
   await refreshInstances().catch(() => {})
+  if (expectedToken !== null && expectedToken !== state.routeToken) return
   clearInterval(state.pollTimer)
   state.pollTimer = setInterval(() => {
     if (!document.hidden) refreshInstances().catch(() => {})
@@ -298,7 +453,9 @@ function renderInstances() {
     chev.className = 'chev'
     chev.textContent = '›'
     card.append(dot, main, chev)
-    card.addEventListener('click', () => openConsole(item))
+    card.addEventListener('click', () => {
+      setRoute({ view: 'instance', instanceId: item.id })
+    })
     wrap.append(card)
   }
 }
@@ -328,6 +485,8 @@ async function openConsole(item) {
   state.permission = null
   state.permissions = { options: [], defaultPreset: null, loaded: false }
   state.prompts.clear()
+  state.recentSessionId = null
+  state.sessionSeed = null
   renderPrompts()
   $('instance-name').textContent = item.name || 'DSH'
   $('session-list').replaceChildren()
@@ -343,8 +502,7 @@ function closeConsole() {
   closeSocket()
   state.instance = null
   state.sessionId = null
-  if (!$('instances').classList.contains('hidden')) return
-  showInstances()
+  state.routeToken += 1
 }
 
 function closeSocket() {
@@ -540,7 +698,14 @@ function sessionRow(item) {
   }
 
   button.append(title, meta)
-  button.addEventListener('click', () => openSession(item.id))
+  button.addEventListener('click', () => {
+    if (!state.instance) return
+    setRoute({
+      view: 'session',
+      instanceId: state.instance.id,
+      sessionId: item.id,
+    })
+  })
   return button
 }
 
@@ -658,7 +823,7 @@ function renderSessions() {
   $('empty-sessions').classList.toggle('hidden', total > 0 || state.groups.length > 0)
 }
 
-function showSessions() {
+async function showSessions() {
   if (state.sessionId) {
     rpc('session.detach', { sessionId: state.sessionId }).catch(() => {})
     state.sessionId = null
@@ -669,10 +834,15 @@ function showSessions() {
   updatePermissionControls()
   $('chat').classList.add('hidden')
   $('session-list-wrap').classList.remove('hidden')
-  loadSessions()
+  await loadSessions()
 }
 
 async function openSession(sessionId, seed) {
+  if (!seed && state.sessionSeed?.sessionId === sessionId) {
+    seed = state.sessionSeed
+    state.sessionSeed = null
+  }
+  if (state.recentSessionId === sessionId) state.recentSessionId = null
   if (state.sessionId && state.sessionId !== sessionId) {
     rpc('session.detach', { sessionId: state.sessionId }).catch(() => {})
   }
@@ -857,17 +1027,22 @@ async function createChat(workspaceId, permission, modelSelection) {
     if (created.permission) state.permission = created.permission
     if (created.workspaceId) state.expanded.add(created.workspaceId)
     else state.expanded.add('__ungrouped__')
-    await loadSessions()
-    await openSession(
-      created.sessionId,
-      !created.modelError && created.model
-        ? {
-            provider: created.provider,
-            model: created.model,
-            reasoningEffort: created.reasoningEffort,
-          }
-        : null,
-    )
+    const seed = !created.modelError && created.model
+      ? {
+          provider: created.provider,
+          model: created.model,
+          reasoningEffort: created.reasoningEffort,
+        }
+      : null
+    const instanceId = state.instance?.id
+    if (instanceId) {
+      state.recentSessionId = created.sessionId
+      state.sessionSeed = seed ? { sessionId: created.sessionId, ...seed } : null
+      await loadSessions()
+      setRoute({ view: 'session', instanceId, sessionId: created.sessionId })
+    } else {
+      await openSession(created.sessionId, seed)
+    }
   } catch (error) {
     toast(error.message, 4000)
   }
@@ -1058,9 +1233,16 @@ function renderQuestionPrompt(prompt) {
   return card
 }
 
+function updateSendState() {
+  const input = $('input')
+  $('send').disabled = state.running || state.sending || !state.sessionId || input.value.trim().length === 0
+}
+
 function setRunning(running) {
   state.running = running
+  $('send').classList.toggle('hidden', running)
   $('stop').classList.toggle('hidden', !running)
+  updateSendState()
   if (state.sessionId) {
     const row = state.sessions.find(item => item.id === state.sessionId)
     if (row) {
@@ -1073,7 +1255,8 @@ function setRunning(running) {
 async function sendMessage() {
   const input = $('input')
   const text = input.value.trim()
-  if (!text || !state.sessionId) return
+  if (!text || !state.sessionId || state.running || state.sending) return
+  state.sending = true
   const button = $('send')
   button.disabled = true
   try {
@@ -1091,7 +1274,8 @@ async function sendMessage() {
   } catch (error) {
     toast(error.message, 4000)
   } finally {
-    button.disabled = false
+    state.sending = false
+    updateSendState()
     input.focus()
   }
 }

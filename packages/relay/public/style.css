@@ -636,16 +636,36 @@ details.reasoning pre {
   width: auto;
 }
 
-.send {
-  width: auto;
+.composer-row .composer-action {
+  width: 64px;
+  min-width: 64px;
+  height: 44px;
   flex: none;
-  padding: 12px 18px;
+  padding: 0;
   border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 650;
 }
 
-.composer-row .send {
-  width: auto;
-  flex: none;
+.composer-row .send:disabled {
+  opacity: 1;
+  background: var(--panel-2);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.composer-row .stop {
+  margin-left: 0;
+  color: var(--red);
+  background: rgba(248, 81, 73, .12);
+  border: 1px solid rgba(248, 81, 73, .5);
+}
+
+.composer-row .composer-action:active {
+  transform: translateY(1px);
 }
 
 .composer-meta {
@@ -684,16 +704,6 @@ details.reasoning pre {
 .model-picker select {
   width: 160px;
   max-width: 100%;
-}
-
-.danger {
-  margin-left: auto;
-  color: var(--red);
-  border: 1px solid rgba(248, 81, 73, .45);
-  border-radius: 9px;
-  padding: 5px 12px;
-  font-size: 12px;
-  background: rgba(248, 81, 73, .08);
 }
 
 /* toast */

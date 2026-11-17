@@ -15,7 +15,7 @@ v0.2 面向个人自用：中继走普通 HTTP，浏览器用「用户名 + 密�
 - 新建对话从工作区行右侧的「+」进入，会话挂到对应工作区；
 - 空白会话（新建后没有发过消息）不显示，发第一条消息后才出现；
 - 助手回复支持 Markdown（标题、列表、粗体/斜体、引用、代码块、表格、链接）；
-- 按轮折叠工具调用和思考过程（「处理过程」），助手回复保持可见；显示每轮编辑过的文件列表；支持工具确认卡片、`ask_user_question` 问答与提交答案；新建会话可选权限（只读 / 工作区可写 / 完全权限）、模型和思考级别，当前会话也能切换；支持停止回合；
+- 按轮折叠工具调用和思考过程（「处理过程」），助手回复保持可见；显示每轮编辑过的文件列表；支持工具确认卡片、`ask_user_question` 问答与提交答案；新建会话可选权限（只读 / 工作区可写 / 完全权限）、模型和思考级别，当前会话也能切换；Hash 路由支持刷新恢复、深链接和浏览器前进/后退；支持停止回合；
 - 中继不保存对话内容，只负责配对、实例列表和消息转发。
 
 ## 文档
@@ -54,7 +54,7 @@ notepad config.json
 node server.js
 ```
 
-在 `config.json` 里设置端口、登录用户名/密码和可选的插件令牌；默认监听 `0.0.0.0:7801`，浏览器页面 `http://<中继IP>:7801/`。各字段（host / port / username / password / sessionSecret / pluginToken）的含义、默认值和加载行为见 [DEPLOY.md](docs/DEPLOY.md#配置文件推荐)。
+在 `config.json` 里设置端口、登录用户名/密码、登录有效期和可选的插件令牌；默认监听 `0.0.0.0:7801`，浏览器页面 `http://<中继IP>:7801/`。各字段（host / port / username / password / sessionSecret / sessionTtlDays / pluginToken）的含义、默认值和加载行为见 [DEPLOY.md](docs/DEPLOY.md#配置文件推荐)。
 
 不想用配置文件时也可以用环境变量：`DSWC_PASSWORD='...' node server.js`（PowerShell 用 `$env:DSWC_PASSWORD = '...'`）。配置文件里写过的字段优先于环境变量。云服务器部署（systemd、Docker、防火墙、HTTPS 说明）见 [DEPLOY.md](docs/DEPLOY.md)。
 
@@ -108,6 +108,7 @@ node server.js
 
 - **必须修改默认密码**：在 `packages/relay/config.json` 里设置强 `password`（或环境变量 `DSWC_PASSWORD`）；
 - 建议设置 `sessionSecret`（或 `DSWC_SECRET`），让浏览器登录状态跨重启保留；
+- 登录有效期默认 30 天，可以用 `sessionTtlDays`（或 `DSWC_SESSION_TTL_DAYS`）调整；调小不会立即让已登录设备掉线，若要让所有设备立即重新登录，请修改 `sessionSecret`；
 - 如非必要不要裸暴露 7801；优先 VPN、防火墙白名单或内网；
 - 可设置 `pluginToken`（或 `DSWC_PLUGIN_TOKEN`），并在 PC 插件设置里填同一个值；
 - `config.json` 默认是占位密码 `change-me`：部署时改成强密码，建议权限设为 `600`；真实密码不要提交到公开仓库；

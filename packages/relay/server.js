@@ -27,6 +27,7 @@ const CONFIG_FIELDS = {
   username: 'DSWC_USER',
   password: 'DSWC_PASSWORD',
   sessionSecret: 'DSWC_SECRET',
+  sessionTtlDays: 'DSWC_SESSION_TTL_DAYS',
   pluginToken: 'DSWC_PLUGIN_TOKEN',
 }
 
@@ -36,6 +37,7 @@ const DEFAULT_CONFIG = {
   username: 'admin',
   password: 'dswc',
   sessionSecret: '',
+  sessionTtlDays: 30,
   pluginToken: '',
 }
 
@@ -107,10 +109,18 @@ function normalizeConfig(file, fileConfig) {
   if (!password) throw invalidField('password', '不能为空', picked.password)
 
   const sessionSecret = String(picked.sessionSecret.value ?? '').trim()
+  const sessionTtlDays = Number(picked.sessionTtlDays.value)
+  if (!Number.isFinite(sessionTtlDays) || sessionTtlDays <= 0 || sessionTtlDays > 3650) {
+    throw invalidField(
+      'sessionTtlDays',
+      `必须是大于 0 且不超过 3650 的天数，当前为 ${JSON.stringify(picked.sessionTtlDays.value)}`,
+      picked.sessionTtlDays,
+    )
+  }
   const pluginToken = String(picked.pluginToken.value ?? '').trim()
 
   return {
-    config: { host, port, username, password, sessionSecret, pluginToken },
+    config: { host, port, username, password, sessionSecret, sessionTtlDays, pluginToken },
     unknownKeys: fileConfig ? Object.keys(fileConfig).filter(key => !keys.includes(key)) : [],
   }
 }
@@ -137,7 +147,7 @@ const PASSWORD = loadedConfig.config.password
 const PLUGIN_TOKEN = loadedConfig.config.pluginToken
 const SESSION_SECRET = loadedConfig.config.sessionSecret || crypto.randomBytes(32).toString('hex')
 const COOKIE_NAME = 'dswc_session'
-const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60
+const SESSION_TTL_SECONDS = Math.max(60, Math.round(loadedConfig.config.sessionTtlDays * 86400))
 const MAX_BODY = 16 * 1024
 const MAX_WS_PAYLOAD = 2 * 1024 * 1024
 
@@ -543,6 +553,7 @@ const heartbeat = setInterval(() => {
 server.listen(PORT, HOST, () => {
   log(`DSH Web Control relay listening on http://${HOST}:${PORT}`)
   log(`login user: ${USERNAME}`)
+  log(`session TTL: ${loadedConfig.config.sessionTtlDays} day(s) (${SESSION_TTL_SECONDS}s)`)
   log(`config: ${loadedConfig.file || '环境变量 / 内置默认值'}`)
   for (const key of loadedConfig.unknownKeys) {
     log(`config: ignored unknown field "${key}" in ${loadedConfig.file}`)

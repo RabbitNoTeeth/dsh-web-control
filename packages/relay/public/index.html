@@ -69,7 +69,8 @@
       <div class="composer">
         <div class="composer-row">
           <textarea id="input" rows="1" placeholder="发消息…" autocomplete="off"></textarea>
-          <button id="send" class="primary send" type="button">发送</button>
+          <button id="send" class="primary send composer-action" type="button" disabled>发送</button>
+          <button id="stop" class="stop composer-action hidden" type="button">停止</button>
         </div>
         <div class="composer-meta">
           <label id="permission-wrap" class="permission hidden">
@@ -84,7 +85,6 @@
             <!-- 思考 -->
             <select id="reasoning"></select>
           </label>
-          <button id="stop" class="danger hidden" type="button">停止</button>
         </div>
       </div>
     </div>

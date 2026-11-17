@@ -150,6 +150,15 @@ const picked = await evaluate(`(() => {
   return false;
 })()`)
 console.log('create via', picked)
+let sheetOpen = false
+for (let attempt = 0; attempt < 25; attempt++) {
+  sheetOpen = await evaluate("!document.getElementById('new-chat-sheet').classList.contains('hidden')")
+  if (sheetOpen) break
+  await sleep(200)
+}
+if (sheetOpen) {
+  await evaluate("document.getElementById('new-chat-create').click()")
+}
 await sleep(3000)
 await shot('ui-chat-empty')
 
