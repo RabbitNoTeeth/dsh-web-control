@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="DSH Web Control">
+  <rect x="6" y="10" width="52" height="36" rx="6" fill="#1f6feb"/>
+  <rect x="10" y="14" width="44" height="28" rx="3" fill="#0d1117"/>
+  <path d="M22 46h20v4H22z" fill="#1f6feb"/>
+  <path d="M30 30l-5-5m0 0v4m0-4h4M34 30l5-5m0 0v4m0-4h-4" stroke="#58a6ff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <circle cx="46" cy="18" r="3" fill="#3fb950"/>
+</svg>

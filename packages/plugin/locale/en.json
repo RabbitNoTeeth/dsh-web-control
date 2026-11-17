@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "DSH Web Control remote control",
+    "description": "Watch sessions, start a chat, and keep talking from a web browser through your own relay.",
+    "detail": "docs/DETAIL.md"
+  }
+}

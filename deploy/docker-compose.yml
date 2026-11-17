@@ -1,0 +1,19 @@
+services:
+  relay:
+    build: ../packages/relay
+    restart: unless-stopped
+    ports:
+      - "7801:7801"
+    environment:
+      PORT: "7801"
+      DSWC_USER: "${DSWC_USER:-admin}"
+      DSWC_PASSWORD: "${DSWC_PASSWORD:-}"
+      DSWC_SECRET: "${DSWC_SECRET:-}"
+      DSWC_PLUGIN_TOKEN: "${DSWC_PLUGIN_TOKEN:-}"
+    # 可选：挂载 ../packages/relay/config.json 代替上面的 environment。
+    # 配置文件里写过的字段优先，端口也要同步修改上面的 ports 映射。
+    # volumes:
+    #   - ../packages/relay/config.json:/app/config.json:ro
+    read_only: true
+    tmpfs:
+      - /tmp

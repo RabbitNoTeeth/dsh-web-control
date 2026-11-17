@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "DSH Web Control 远程控制",
+    "description": "通过自己的中继服务器，用浏览器查看会话、新建对话并继续交流。",
+    "detail": "docs/DETAIL.md"
+  }
+}

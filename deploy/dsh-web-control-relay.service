@@ -1,0 +1,23 @@
+[Unit]
+Description=DSH Web Control relay for DSH
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=dsh-web-control
+Group=dsh-web-control
+WorkingDirectory=/opt/dsh-web-control/relay
+# 可选：config.json 缺字段时才使用这里的变量；文件不存在也能启动
+EnvironmentFile=-/etc/dsh-web-control/relay.env
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/dsh-web-control/relay
+
+[Install]
+WantedBy=multi-user.target

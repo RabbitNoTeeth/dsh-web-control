@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0d1117">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ws: wss:; base-uri 'none'; form-action 'self'">
+  <title>DSH Web Control</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <section id="login" class="screen hidden">
+    <div class="login-card">
+      <div class="logo">XD</div>
+      <h1>DSH Web Control</h1>
+      <p class="muted">远程连接你的 DSH</p>
+      <form id="login-form">
+        <label>用户名
+          <input id="username" name="username" autocomplete="username" autocapitalize="off" spellcheck="false">
+        </label>
+        <label>密码
+          <input id="password" name="password" type="password" autocomplete="current-password">
+        </label>
+        <button class="primary" type="submit">登录</button>
+        <p id="login-error" class="error" role="alert"></p>
+      </form>
+    </div>
+  </section>
+
+  <section id="instances" class="screen hidden">
+    <header class="topbar">
+      <div class="brand">DSH Web Control</div>
+      <button id="logout" class="ghost" type="button">退出</button>
+    </header>
+    <main class="page">
+      <h2>我的电脑</h2>
+      <div id="instance-list" class="cards"></div>
+      <p id="empty-instances" class="empty hidden">
+        还没有在线的电脑。<br>
+        在 DSH 里运行 <code>/webctl 服务器IP:7801</code>
+      </p>
+    </main>
+  </section>
+
+  <section id="console" class="screen hidden">
+    <header class="topbar console-bar">
+      <button id="back" class="ghost back" type="button" aria-label="返回">‹</button>
+      <div class="title-wrap">
+        <div id="instance-name" class="title">DSH</div>
+        <div id="conn-state" class="sub">连接中…</div>
+      </div>
+      <span class="topbar-spacer" aria-hidden="true"></span>
+    </header>
+
+    <div id="session-list-wrap" class="session-list-wrap">
+      <div id="session-list" class="tree"></div>
+      <p id="empty-sessions" class="empty hidden">
+        还没有会话。<br>
+        <button id="empty-new-chat" class="primary empty-create" type="button">新建默认对话</button>
+      </p>
+    </div>
+
+    <div id="chat" class="chat hidden">
+      <div class="messages-wrap">
+        <div id="messages" class="messages" aria-live="polite"></div>
+        <nav id="turn-nav" class="turn-nav hidden" aria-label="问题导航"></nav>
+      </div>
+      <div id="prompts" class="prompts hidden" aria-live="polite"></div>
+      <div class="composer">
+        <div class="composer-row">
+          <textarea id="input" rows="1" placeholder="发消息…" autocomplete="off"></textarea>
+          <button id="send" class="primary send" type="button">发送</button>
+        </div>
+        <div class="composer-meta">
+          <label id="permission-wrap" class="permission hidden">
+            <!-- 权限 -->
+            <select id="permission"></select>
+          </label>
+          <label id="model-wrap" class="model-picker hidden">
+            <!-- 模型 -->
+            <select id="model"></select>
+          </label>
+          <label id="reasoning-wrap" class="reasoning hidden">
+            <!-- 思考 -->
+            <select id="reasoning"></select>
+          </label>
+          <button id="stop" class="danger hidden" type="button">停止</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="new-chat-sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-labelledby="new-chat-title">
+      <div class="sheet-card">
+        <h3 id="new-chat-title">新建对话</h3>
+        <p id="new-chat-target" class="sheet-desc"></p>
+        <label class="sheet-field">模型
+          <select id="new-chat-model"></select>
+        </label>
+        <label id="new-chat-reasoning-wrap" class="sheet-field">思考级别
+          <select id="new-chat-reasoning"></select>
+        </label>
+        <label class="sheet-field">权限
+          <select id="new-chat-permission"></select>
+        </label>
+        <p id="new-chat-permission-desc" class="sheet-desc"></p>
+        <div class="sheet-actions">
+          <button id="new-chat-cancel" class="ghost" type="button">取消</button>
+          <button id="new-chat-create" class="primary" type="button">新建</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div id="toast" class="toast hidden" role="status"></div>
+  <script src="/vendor/marked.umd.js"></script>
+  <script src="/vendor/purify.min.js"></script>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

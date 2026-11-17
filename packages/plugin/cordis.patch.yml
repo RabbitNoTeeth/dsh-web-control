@@ -1,0 +1,3 @@
+- insert:
+    - id: dsh-web-control
+      name: '@local/dsh-web-control'
