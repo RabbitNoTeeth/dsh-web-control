@@ -95,22 +95,6 @@ node server.js
 
 浏览器端操作细节和常见问题见 [USAGE.md](docs/USAGE.md)。
 
-## 从 XDControl 改名
-
-插件、仓库和工作区目录都从 `xdcontrol` 改成了 `dsh-web-control`。对照表：
-
-| 旧 | 新 |
-|---|---|
-| 插件包 `@local/dsh-xdcontrol`，插件 id `xdcontrol` | `@local/dsh-web-control`，id `dsh-web-control` |
-| 插件名「XDControl 远程控制」 | 「DSH Web Control 远程控制」 |
-| 快捷命令 `/xdcontrol` | `/webctl` |
-| 配置 `$DSH_HOME/xdcontrol.json` | `$DSH_HOME/dsh-web-control.json`（自动迁移，旧文件保留） |
-| 中继配置 `XDCTL_*` 环境变量 | `config.json`（推荐）或 `DSWC_*` 环境变量 |
-| 中继包 / systemd 单元 `xdcontrol-relay` | `dsh-web-control-relay` |
-| 会话 Cookie `xd_session` | `dswc_session`（浏览器端需重新登录一次） |
-
-中继已经在运行的话，按 [DEPLOY.md](docs/DEPLOY.md#从-xdcontrol-改名前升级) 里的一次性搬迁步骤处理。
-
 ## 安全
 
 - **必须修改默认密码**：在 `packages/relay/config.json` 里设置强 `password`（或环境变量 `DSWC_PASSWORD`）；
