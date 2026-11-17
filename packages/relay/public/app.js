@@ -36,12 +36,15 @@ const state = {
   route: { view: 'devices' },
   recentSessionId: null,
   sessionSeed: null,
+  loadingSessionId: null,
   pending: new Map(),
   pollTimer: null,
   reconnectTimer: null,
   toastTimer: null,
   live: null,
 }
+
+let chatLoadingTimer = null
 
 /* ------------------------------------------------------------------- utils */
 
@@ -402,6 +405,7 @@ async function showSessionList() {
 }
 
 async function showInstances(expectedToken = null) {
+  hideChatLoading()
   show('instances')
   closeSocket()
   state.instance = null
@@ -463,6 +467,7 @@ function renderInstances() {
 /* ----------------------------------------------------------------- console */
 
 async function openConsole(item) {
+  hideChatLoading()
   clearInterval(state.pollTimer)
   state.instance = item
   state.sessions = []
@@ -499,6 +504,7 @@ async function openConsole(item) {
 }
 
 function closeConsole() {
+  hideChatLoading()
   closeSocket()
   state.instance = null
   state.sessionId = null
@@ -824,6 +830,7 @@ function renderSessions() {
 }
 
 async function showSessions() {
+  hideChatLoading()
   if (state.sessionId) {
     rpc('session.detach', { sessionId: state.sessionId }).catch(() => {})
     state.sessionId = null
@@ -835,6 +842,25 @@ async function showSessions() {
   $('chat').classList.add('hidden')
   $('session-list-wrap').classList.remove('hidden')
   await loadSessions()
+}
+
+function showChatLoading(sessionId) {
+  clearTimeout(chatLoadingTimer)
+  state.loadingSessionId = sessionId
+  $('chat-loading').classList.remove('hidden')
+  chatLoadingTimer = setTimeout(() => {
+    if (state.loadingSessionId !== sessionId) return
+    hideChatLoading(sessionId)
+    toast('对话加载超时，请检查连接后重试', 5000)
+  }, 45_000)
+}
+
+function hideChatLoading(sessionId = null) {
+  if (sessionId && state.loadingSessionId && sessionId !== state.loadingSessionId) return
+  clearTimeout(chatLoadingTimer)
+  chatLoadingTimer = null
+  state.loadingSessionId = null
+  $('chat-loading')?.classList.add('hidden')
 }
 
 async function openSession(sessionId, seed) {
@@ -866,6 +892,7 @@ async function openSession(sessionId, seed) {
   $('turn-nav').classList.add('hidden')
   $('session-list-wrap').classList.add('hidden')
   $('chat').classList.remove('hidden')
+  showChatLoading(sessionId)
   state.model = seed?.model || null
   state.provider = seed?.provider || null
   state.reasoning = seed?.reasoningEffort || null
@@ -879,6 +906,7 @@ async function openSession(sessionId, seed) {
   try {
     await rpc('session.attach', { sessionId })
   } catch (error) {
+    hideChatLoading(sessionId)
     toast(error.message)
   }
 }
@@ -1317,6 +1345,7 @@ function handleEvent(event) {
         loading: false,
       }
       state.follow = true
+      hideChatLoading(event.sessionId)
       renderMessages(true)
       requestAnimationFrame(() => scrollBottom(true))
       setRunning(event.running === true)
@@ -1343,6 +1372,7 @@ function handleEvent(event) {
       setRunning(event.running === true)
       break
     case 'error':
+      hideChatLoading(event.sessionId)
       toast(event.message, 4000)
       break
     default:
