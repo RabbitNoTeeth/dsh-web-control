@@ -1,12 +1,14 @@
 # DSH Web Control：DSH 远程控制方案
 
+> **历史设计文档**：本文是 v0.1 时期的方案草案，包含大量尚未实现或后来调整的内容（如 WSS、PWA、推送、E2E、通知、设备撤销等）。当前实际能力请以 [README](../README.md) 和 [USAGE](USAGE.md) 为准，不要把本文当作功能清单。
+
 > 工作区：`D:\Products\dsh-web-control`
 > 目标运行时：DeepSeek Harness Desktop `0.2.2-rc.3`（当前安装）
 > 状态：v0.1 已实现（按用户要求简化），实际行为见 [README](../README.md)
 > 结论：采用「DSH Host 插件 + 云服务器中继 + 浏览器 PWA」三段式；电脑只发起出站连接，不开放任何入站端口。
 
 > **v0.1 实现说明（2026-11-15）**：按用户要求先做了简化版，实际行为以 [README](../README.md) 为准：
-> 中继 HTTP + 用户名密码，无加密、无审批卡片、无推送、无文件上传；
+> 中继 HTTP + 用户名密码，无加密、无推送、无文件上传；v0.1 当时没有审批卡片（当前 v0.2 已支持，见 README）；
 > 远程新建会话可选择权限（只读 / 工作区可写 / 完全权限）、模型（DeepSeek-V4.1-Flash / DeepSeek-V4-Pro）和思考级别；
 > PC 端在「插件 → DSH Web Control 远程控制」页面配置中继，`/webctl` 是快捷命令。
 > 本文其余部分保留为后续版本的设计参考。

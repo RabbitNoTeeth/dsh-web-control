@@ -32,14 +32,14 @@ v0.2 面向个人自用：中继走普通 HTTP，浏览器用「用户名 + 密�
 | [安装插件](docs/INSTALL.md) | 在 DSH 中安装、启用、更新、卸载 |
 | [部署中继](docs/DEPLOY.md) | 本地运行、云服务器 systemd/Docker、环境变量、安全、故障排查 |
 | [使用说明](docs/USAGE.md) | PC 配置、浏览器操作、工作区树、Markdown、常见问题 |
-| [设计记录](docs/PLAN.md) | 早期完整方案（审批、推送、E2E 等未实现部分） |
+| [设计记录](docs/PLAN.md) | 早期设计草案（WSS/PWA、推送、E2E 等未实现，不代表当前能力） |
 
 ## 架构
 
 ```text
 浏览器 ──HTTP/WS──► 中继（云服务器，默认 7801）
                               ▲
-                              │ PC 主动出站 WSS
+                              │ PC 主动出站 WS（v0.2 为 ws:// 明文）
                               │
                      Windows PC：DSH Desktop + DSH Web Control 插件
 ```
@@ -97,7 +97,7 @@ node server.js
 
 ## 从 XDControl 改名
 
-插件、仓库和工作区目录都从 `xdcontrol` 改成了 `dsh-web-control`（当前目录 `D:\Products\dsh-web-control`）。对照表：
+插件、仓库和工作区目录都从 `xdcontrol` 改成了 `dsh-web-control`。对照表：
 
 | 旧 | 新 |
 |---|---|
@@ -118,7 +118,7 @@ node server.js
 - 登录有效期默认 30 天，可以用 `sessionTtlDays`（或 `DSWC_SESSION_TTL_DAYS`）调整；调小不会立即让已登录设备掉线，若要让所有设备立即重新登录，请修改 `sessionSecret`；
 - 如非必要不要裸暴露 7801；优先 VPN、防火墙白名单或内网；
 - 可设置 `pluginToken`（或 `DSWC_PLUGIN_TOKEN`），并在 PC 插件设置里填同一个值；
-- `config.json` 默认是占位密码 `change-me`：部署时改成强密码，建议权限设为 `600`；真实密码不要提交到公开仓库；
+- 部署时不要在 `config.json` 里保留示例/本地测试密码（示例值 `change-me`）：改成强密码，并把文件权限设为 `600`；真实密码不要提交到公开仓库；
 - 远程会话的权限由你选择的预设决定；选择「完全权限」时 Agent 可以执行任意命令、读写任意文件，持有登录状态的设备丢失等同于电脑控制权丢失；
 - 不用时关闭插件里的「启用远程控制」或执行 `/webctl off`。
 
@@ -126,11 +126,12 @@ node server.js
 
 ## 已知限制
 
-- 没有审批卡片：远程权限由预设决定（只读 / 工作区可写 / 完全权限），完全权限下如果某个工具仍然请求审批，会按 `never` 策略被拒绝；
+- 工具审批和提问只在当前会话有浏览器连接时接管；没有浏览器连接时交给 PC 端的 DSH 处理。是否触发审批仍取决于权限预设，完全权限通常不会触发；
+- 带自动继续的 `timed` 模式 `ask_user_question` 仍交给 PC 端处理，普通阻塞式提问支持远程回答；
 - 没有推送通知，需要保持页面打开；
 - 没有图片/文件上传、端到端加密；
 - 中继没有数据库，重启后实例列表需要 PC 重新连接；
-- 页面通过 HTTP 访问时不能作为 PWA 安装。
+- 当前没有 PWA manifest / Service Worker，不能安装为 PWA（与 HTTP/HTTPS 无关）。
 
 ## 开发
 

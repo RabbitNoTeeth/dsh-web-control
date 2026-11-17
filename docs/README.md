@@ -5,14 +5,14 @@
 | [INSTALL.md](INSTALL.md) | 在 DSH 中安装、启用、更新、卸载插件 |
 | [DEPLOY.md](DEPLOY.md) | 本地运行、config.json 配置、云服务器 systemd/Docker 部署、环境变量、安全与故障排查 |
 | [USAGE.md](USAGE.md) | PC 端配置、浏览器端登录/工作区树/新建对话/Markdown/安全提醒 |
-| [PLAN.md](PLAN.md) | 早期完整设计记录（审批、推送、E2E 等未实现部分） |
+| [PLAN.md](PLAN.md) | 早期设计草案（WSS/PWA、推送、E2E 等未实现，不代表当前能力） |
 
 ## 一分钟理解
 
 ```text
 浏览器 ──HTTP/WS──► 中继（你的云服务器，默认 7801）
                               ▲
-                              │ PC 主动出站 WSS
+                              │ PC 主动出站 WS（v0.2 为 ws:// 明文）
                               │
                      Windows PC：DSH Desktop + DSH Web Control 插件
 ```

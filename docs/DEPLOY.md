@@ -7,7 +7,7 @@
 ```text
 浏览器 ──HTTP/WS──► 云服务器:7801（中继）
                               ▲
-                              │ 出站 WSS（PC 主动连）
+                              │ 出站 WS（PC 主动连，v0.2 为 ws:// 明文）
                               │
                      Windows PC 上的 DSH 插件
                               │
@@ -31,7 +31,7 @@ nano config.json          # Windows: notepad config.json
 node server.js
 ```
 
-`config.json` 是 UTF-8 编码的 JSON 对象。仓库里的默认内容就是下面这份，直接改值即可：
+`config.json` 是 UTF-8 编码的 JSON 对象。下面是推荐模板（仓库里的 `config.json` 可能已有本机测试值，部署时不要直接使用）：
 
 ```json
 {
@@ -314,14 +314,16 @@ v0.2 的中继本身是 **HTTP**，PC 插件也只支持 `ws://`。可以这样�
 
 ```bash
 cd /opt/dsh-web-control
-sudo cp -r <新版本>/packages/relay ./relay
+sudo rsync -a --exclude config.json <新版本>/packages/relay/ ./relay/
 cd relay
 sudo npm ci --omit=dev
 sudo systemctl restart dsh-web-control-relay
 ```
 
+> 没有 `rsync` 时，先用 `sudo cp -a ./relay/config.json /tmp/dsh-web-control-config.json` 备份，更新代码后再覆盖回来；不要直接用包含 `config.json` 的目录整体覆盖。
+
 - 插件会自动退避重连，不需要重新配置；
-- 配置文件是 `relay/config.json`，升级前先备份；覆盖 `packages/relay` 不会删除或改写它；
+- 配置文件是 `relay/config.json`，升级前先备份；更新代码时不要覆盖它；
 - 设置了 `sessionSecret`（或 `DSWC_SECRET`）时，浏览器端登录状态在重启后保留；
 - 未设置时，重启会更换 Cookie 密钥，浏览器端需要重新登录。
 
