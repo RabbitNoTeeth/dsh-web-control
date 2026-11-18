@@ -129,8 +129,21 @@ function setRoute(route, options = {}) {
 
 function setConn(text, tone = 'muted') {
   const el = $('conn-state')
-  el.textContent = text
-  el.style.color = tone === 'ok' ? 'var(--green)' : tone === 'bad' ? 'var(--red)' : 'var(--muted)'
+  if (!el) return
+  el.dataset.tone = tone
+  el.title = text
+  el.setAttribute('aria-label', `连接状态：${text}`)
+}
+
+function updateHeaderTitle() {
+  const el = $('instance-name')
+  if (!el) return
+  if (state.sessionId) {
+    const row = state.sessions.find(item => item.id === state.sessionId)
+    el.textContent = row?.title || '新对话'
+  } else {
+    el.textContent = state.instance?.name || 'DSH'
+  }
 }
 
 function relativeTime(ts) {
@@ -493,13 +506,13 @@ async function openConsole(item) {
   state.recentSessionId = null
   state.sessionSeed = null
   renderPrompts()
-  $('instance-name').textContent = item.name || 'DSH'
+  updateHeaderTitle()
   $('session-list').replaceChildren()
   $('empty-sessions').classList.add('hidden')
   $('chat').classList.add('hidden')
   $('session-list-wrap').classList.remove('hidden')
   show('console')
-  setConn('连接中…')
+  setConn('连接中…', 'warn')
   connect()
 }
 
@@ -596,7 +609,8 @@ function handleMessage(message) {
     if (message.event === 'connected') {
       state.clientId = message.clientId
       const info = message.instance || {}
-      $('instance-name').textContent = info.name || state.instance?.name || 'DSH'
+      if (state.instance && info.name) state.instance.name = info.name
+      updateHeaderTitle()
       setConn('已连接', 'ok')
       loadCatalog()
       loadPermissions()
@@ -669,6 +683,7 @@ async function loadSessions() {
       state.expandedReady = true
     }
     renderSessions()
+    updateHeaderTitle()
   } catch (error) {
     toast(error.message)
   }
@@ -827,6 +842,7 @@ function renderSessions() {
   }
 
   $('empty-sessions').classList.toggle('hidden', total > 0 || state.groups.length > 0)
+  updateHeaderTitle()
 }
 
 async function showSessions() {
@@ -839,6 +855,7 @@ async function showSessions() {
   state.permission = null
   clearPrompts()
   updatePermissionControls()
+  updateHeaderTitle()
   $('chat').classList.add('hidden')
   $('session-list-wrap').classList.remove('hidden')
   await loadSessions()
@@ -873,6 +890,7 @@ async function openSession(sessionId, seed) {
     rpc('session.detach', { sessionId: state.sessionId }).catch(() => {})
   }
   state.sessionId = sessionId
+  updateHeaderTitle()
   for (const group of state.groups) {
     if ((group.sessionIds || []).includes(sessionId)) state.expanded.add(group.id)
   }
@@ -1354,6 +1372,7 @@ function handleEvent(event) {
       if (event.entry) {
         state.entries.push(event.entry)
         renderMessages()
+        if (event.entry.kind === 'turn-end') void loadSessions()
       }
       break
     case 'prompt':
@@ -1676,6 +1695,35 @@ function formatDuration(ms) {
   return `${hours} 小时 ${minutes % 60} 分`
 }
 
+function formatElapsedShort(ms) {
+  const total = Math.max(1, Math.round(Number(ms) / 1000))
+  if (total < 60) return `${total}s`
+  const minutes = Math.floor(total / 60)
+  const seconds = total % 60
+  if (minutes < 60) return seconds ? `${minutes}m ${seconds}s` : `${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  const rest = minutes % 60
+  return rest ? `${hours}h ${rest}m` : `${hours}h`
+}
+
+let elapsedTimer = null
+
+function ensureElapsedTimer() {
+  if (elapsedTimer) return
+  elapsedTimer = setInterval(() => {
+    const nodes = document.querySelectorAll('.proc-elapsed[data-start]')
+    if (nodes.length === 0) {
+      clearInterval(elapsedTimer)
+      elapsedTimer = null
+      return
+    }
+    for (const node of nodes) {
+      const start = Number(node.dataset.start)
+      if (Number.isFinite(start)) node.textContent = `(${formatElapsedShort(Date.now() - start)})`
+    }
+  }, 1000)
+}
+
 function processSummary(turn, toolCount) {
   const reason = turn.end?.reason
   let label
@@ -1698,7 +1746,22 @@ function renderProcess(turn, process, toolCount) {
   const label = document.createElement('span')
   label.className = 'proc-label'
   const info = processSummary(turn, toolCount)
-  label.textContent = info.label
+  const labelText = document.createElement('span')
+  labelText.textContent = info.label
+  label.append(labelText)
+  if (!turn.end) {
+    const start = Number.isFinite(turn.startTime) ? turn.startTime : Date.now()
+    const elapsed = document.createElement('span')
+    elapsed.className = 'proc-elapsed'
+    elapsed.dataset.start = String(start)
+    elapsed.textContent = `(${formatElapsedShort(Date.now() - start)})`
+    label.append(elapsed)
+    ensureElapsedTimer()
+    const spinner = document.createElement('span')
+    spinner.className = 'proc-spinner'
+    spinner.setAttribute('aria-hidden', 'true')
+    label.append(spinner)
+  }
   summary.append(label)
   if (info.meta) {
     const right = document.createElement('span')
