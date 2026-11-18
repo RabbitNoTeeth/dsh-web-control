@@ -44,31 +44,36 @@ packages/plugin/
 
 1. 打开 **插件** → **DSH Web Control 远程控制**；
 2. 滚动到页面底部的 **DSH Web Control 连接设置**；
-3. 填写：
+3. 页面可以保存多个中继配置：
 
-| 字段 | 说明 |
+| 字段 | 作用 |
 |---|---|
-| 启用远程控制 | 关闭后插件不连接中继 |
+| 启用远程控制 | 总开关；关闭后插件不连接任何中继 |
+| 配置名称 | 仅用于区分，例如「本地调试」「云中继」 |
 | 中继服务器 | 云服务器 IP 或域名，例如 `1.2.3.4` |
 | 端口 | 默认 `7801` |
-| 电脑名称 | 中继页面上显示的名字，留空使用主机名 |
-| 默认目录（不选工作区时） | 没有工作区时新建对话使用的目录 |
-| 插件令牌 | 可选，与中继的插件令牌一致（`config.json` 的 `pluginToken` 或 `DSWC_PLUGIN_TOKEN`） |
+| 插件令牌 | 可选，与当前中继的插件令牌一致（`config.json` 的 `pluginToken` 或 `DSWC_PLUGIN_TOKEN`） |
+| 当前使用 | 单选；插件只会连接选中的这一个中继 |
+| 电脑名称 | 中继页面上显示的名字，留空使用主机名；所有中继共用 |
+| 默认目录（不选工作区时） | 没有工作区时新建对话使用的目录；所有中继共用 |
 
-4. 点 **保存并连接**；
-5. 状态行显示「已连接中继 · inst_xxx」即成功。
+4. 点 **保存并连接**；切换中继后，插件会先断开旧连接，再连接选中的中继；
+5. 状态行显示「已连接：<配置名称> · inst_xxx」即成功。
+
+旧版的单中继配置会自动作为一个名为「默认中继」的配置加载；保存后会写成多中继格式。
 
 也可以用 DSH 对话里的快捷命令，两种方式写同一份配置：
 
 ```text
-/webctl 1.2.3.4:7801
-/webctl status
+/webctl 1.2.3.4:7801       修改当前中继并连接
+/webctl use 云中继          切换到指定中继（名称或 ID）
+/webctl status             查看当前中继和全部配置
 /webctl cwd D:\Projects\demo
-/webctl token <令牌>
+/webctl token <令牌>       设置当前中继的插件令牌
 /webctl off
 ```
 
-配置保存在 `$DSH_HOME/dsh-web-control.json`（Windows 通常是 `C:\Users\<你>\.dsh\dsh-web-control.json`）。
+配置保存在 `$DSH_HOME/dsh-web-control.json`（Windows 通常是 `C:\Users\<你>\.dsh\dsh-web-control.json`）。文件里用 `relays` 数组保存多个配置，`activeRelayId` 标记当前使用的那一个；一般通过设置页修改即可。
 
 > **从旧版本升级**：插件之前叫 XDControl，配置文件名是 `xdcontrol.json`，快捷命令是 `/xdcontrol`。新版首次加载时会自动读取旧配置并写成 `dsh-web-control.json`，旧文件保留不动；命令统一改成 `/webctl`，旧命令不再响应。中继侧的环境变量前缀也从 `XDCTL_` 改成了 `DSWC_`，见 [DEPLOY.md](DEPLOY.md#环境变量)。
 

@@ -37,15 +37,71 @@ function readConfigFile(file) {
   return JSON.parse(readFileSync(file, 'utf8').replace(/^\uFEFF/, ''))
 }
 
-function loadFileConfig() {
-  const fallback = {
-    enabled: true,
-    relayHost: '',
-    relayPort: DEFAULT_PORT,
-    instanceName: os.hostname(),
-    pluginToken: '',
-    defaultCwd: '',
+const DEFAULT_RELAY_NAME = '默认中继'
+
+function makeRelayId() {
+  return `relay_${randomUUID().replace(/-/g, '').slice(0, 10)}`
+}
+
+function clampRelayPort(value) {
+  const port = Math.trunc(Number(value))
+  return Number.isFinite(port) && port > 0 ? Math.min(65535, port) : DEFAULT_PORT
+}
+
+function normalizeRelay(value, fallback = {}) {
+  const item = value && typeof value === 'object' ? value : {}
+  return {
+    id: String(item.id || fallback.id || makeRelayId()).trim() || makeRelayId(),
+    name: String(item.name || fallback.name || '').trim() || DEFAULT_RELAY_NAME,
+    relayHost: normalizeHost(item.relayHost ?? item.host ?? fallback.relayHost ?? ''),
+    relayPort: clampRelayPort(item.relayPort ?? item.port ?? fallback.relayPort),
+    pluginToken: String(item.pluginToken ?? fallback.pluginToken ?? '').trim(),
   }
+}
+
+export function activeRelayOf(config) {
+  const relays = Array.isArray(config?.relays) ? config.relays : []
+  return relays.find(relay => relay.id === config?.activeRelayId) || relays[0] || null
+}
+
+export function normalizePluginConfig(input, options = {}) {
+  const value = input && typeof input === 'object' ? input : {}
+  const hasInstanceName = Object.hasOwn(value, 'instanceName')
+  const hasDefaultCwd = Object.hasOwn(value, 'defaultCwd')
+  const instanceName = hasInstanceName
+    ? value.instanceName
+    : (options.instanceName ?? '')
+  const defaultCwd = hasDefaultCwd
+    ? value.defaultCwd
+    : (options.defaultCwd ?? '')
+  const fallbackRelay = normalizeRelay({
+    id: 'default',
+    name: DEFAULT_RELAY_NAME,
+    relayHost: value.relayHost ?? '',
+    relayPort: value.relayPort ?? DEFAULT_PORT,
+    pluginToken: value.pluginToken ?? '',
+  })
+  const relays = []
+  const seen = new Set()
+  const rawRelays = Array.isArray(value.relays) ? value.relays : []
+  for (const raw of rawRelays) {
+    const relay = normalizeRelay(raw)
+    if (seen.has(relay.id)) relay.id = makeRelayId()
+    seen.add(relay.id)
+    relays.push(relay)
+  }
+  if (relays.length === 0) relays.push(fallbackRelay)
+  const requestedActive = String(value.activeRelayId || '').trim()
+  return {
+    enabled: value.enabled !== false,
+    activeRelayId: relays.some(relay => relay.id === requestedActive) ? requestedActive : relays[0].id,
+    relays,
+    instanceName: String(instanceName ?? '').trim() || os.hostname(),
+    defaultCwd: String(defaultCwd ?? '').trim(),
+  }
+}
+
+function loadFileConfig() {
   let raw
   let migrated = false
   try {
@@ -55,24 +111,19 @@ function loadFileConfig() {
       raw = readConfigFile(legacyConfigPath())
       migrated = true
     } catch {
-      return { config: fallback, migrated: false }
+      raw = {}
     }
   }
-  const merged = { ...fallback, ...raw }
-  merged.enabled = merged.enabled !== false
-  merged.relayHost = normalizeHost(merged.relayHost)
-  if (merged.relayPort === undefined || merged.relayPort === null) {
-    merged.relayPort = DEFAULT_PORT
-  }
+  const config = normalizePluginConfig(raw)
   if (migrated) {
-    // Keep the old file untouched; the next save writes the new one.
+    // Write the canonical multi-relay shape to the new path; keep the old file.
     try {
-      writeFileSync(configPath(), JSON.stringify(merged, null, 2), 'utf8')
+      writeFileSync(configPath(), JSON.stringify(config, null, 2), 'utf8')
     } catch {
       migrated = false
     }
   }
-  return { config: merged, migrated }
+  return { config, migrated }
 }
 
 async function saveConfig(next) {
@@ -369,11 +420,13 @@ class RelayClient {
 
   url() {
     if (this.config.enabled === false) return null
-    const host = normalizeHost(this.config.relayHost)
+    const relay = activeRelayOf(this.config)
+    if (!relay) return null
+    const host = normalizeHost(relay.relayHost)
     if (!host) return null
-    const port = Number(this.config.relayPort) || DEFAULT_PORT
+    const port = Number(relay.relayPort) || DEFAULT_PORT
     const name = encodeURIComponent(this.config.instanceName || os.hostname())
-    const token = encodeURIComponent(this.config.pluginToken || '')
+    const token = encodeURIComponent(relay.pluginToken || '')
     return `ws://${host}:${port}/ws/plugin?name=${name}&token=${token}`
   }
 
@@ -515,8 +568,9 @@ class RelayClient {
         return {
           connected: this.ws?.readyState === 1,
           instanceId: this.state.instanceId,
-          relayHost: this.config.relayHost,
-          relayPort: this.config.relayPort,
+          relayHost: activeRelayOf(this.config)?.relayHost ?? '',
+          relayPort: activeRelayOf(this.config)?.relayPort ?? DEFAULT_PORT,
+          activeRelayId: this.config.activeRelayId,
           version: PLUGIN_VERSION,
         }
       case 'sessions.list':
@@ -1195,7 +1249,8 @@ export function apply(ctx) {
   const client = new RelayClient(ctx, config, state)
   const log = ctx.logger
 
-  log.info(`dsh-web-control: 插件已加载，中继 ${config.relayHost || '(未配置)'}:${config.relayPort}`)
+  const initialRelay = activeRelayOf(config)
+  log.info(`dsh-web-control: 插件已加载，中继 ${initialRelay?.name || '(未命名)'} ${initialRelay?.relayHost || '(未配置)'}:${initialRelay?.relayPort ?? DEFAULT_PORT}`)
   if (migrated) {
     log.info(`dsh-web-control: 已把旧配置 xdcontrol.json 迁移到 ${configPath()}`)
   }
@@ -1227,13 +1282,23 @@ export function apply(ctx) {
     scopedListeners.clear()
   })
   function publicConfig() {
+    const active = activeRelayOf(config)
     return {
       enabled: config.enabled !== false,
-      relayHost: config.relayHost,
-      relayPort: config.relayPort,
+      activeRelayId: config.activeRelayId,
+      relays: (config.relays || []).map(relay => ({
+        id: relay.id,
+        name: relay.name,
+        relayHost: relay.relayHost,
+        relayPort: relay.relayPort,
+        pluginToken: relay.pluginToken,
+      })),
+      relayHost: active?.relayHost ?? '',
+      relayPort: active?.relayPort ?? DEFAULT_PORT,
+      relayName: active?.name ?? '',
+      pluginToken: active?.pluginToken ?? '',
       instanceName: config.instanceName,
       defaultCwd: config.defaultCwd,
-      pluginToken: config.pluginToken,
       connected: client.ws?.readyState === 1,
       instanceId: state.instanceId,
       version: PLUGIN_VERSION,
@@ -1242,15 +1307,27 @@ export function apply(ctx) {
 
   function normalizeSettings(input) {
     const value = input && typeof input === 'object' ? input : {}
-    const port = Math.trunc(Number(value.relayPort) || DEFAULT_PORT)
-    return {
-      enabled: value.enabled !== false,
-      relayHost: normalizeHost(value.relayHost),
-      relayPort: Math.min(65535, Math.max(1, port)),
-      instanceName: String(value.instanceName || '').trim(),
-      defaultCwd: String(value.defaultCwd || '').trim(),
-      pluginToken: String(value.pluginToken || '').trim(),
+    if (!Array.isArray(value.relays)) {
+      // Backward-compatible shape from older client versions: apply the flat
+      // relay fields to the currently active profile.
+      const active = activeRelayOf(config)
+      const relays = (config.relays || []).map(relay => relay.id === active?.id
+        ? {
+            ...relay,
+            relayHost: value.relayHost !== undefined ? value.relayHost : relay.relayHost,
+            relayPort: value.relayPort !== undefined ? value.relayPort : relay.relayPort,
+            pluginToken: value.pluginToken !== undefined ? value.pluginToken : relay.pluginToken,
+          }
+        : relay)
+      return normalizePluginConfig(
+        { ...config, ...value, relays, activeRelayId: config.activeRelayId },
+        { instanceName: config.instanceName, defaultCwd: config.defaultCwd },
+      )
     }
+    return normalizePluginConfig(value, {
+      instanceName: config.instanceName,
+      defaultCwd: config.defaultCwd,
+    })
   }
 
   ctx.effect(() => {
@@ -1325,27 +1402,56 @@ export function apply(ctx) {
     ctx.commands.register({
       name: 'webctl',
       description: '配置并连接 DSH Web Control 中继服务器',
-      input: { hint: '<host>[:<port>] | off | status' },
+      input: { hint: '<host>[:<port>] | use <名称|ID> | off | status' },
       handler: async invocation => {
         const raw = String(invocation.rawInput ?? '').trim()
         if (!raw || raw === 'status') {
           const connected = client.ws?.readyState === 1
+          const relay = activeRelayOf(config)
           return {
             kind: 'success',
             text: [
               `DSH Web Control ${PLUGIN_VERSION}`,
-              `中继: ${config.relayHost || '(未配置)'}:${config.relayPort}`,
+              `中继: ${relay ? `${relay.name} ${relay.relayHost || '(未配置)'}:${relay.relayPort}` : '(未配置)'}`,
+              `配置: 共 ${config.relays.length} 个，当前使用「${relay?.name || '-'}」`,
               `状态: ${config.enabled === false ? '已关闭' : connected ? '已连接' : '未连接'}`,
               `实例: ${state.instanceId ?? '-'}`,
               `目录: ${config.defaultCwd || '(跟随最近会话)'}`,
-              `插件令牌: ${config.pluginToken ? '已设置' : '未设置'}`,
+              `插件令牌: ${relay?.pluginToken ? '已设置' : '未设置'}`,
+              '',
+              '中继列表:',
+              ...config.relays.map(item =>
+                `${item.id === config.activeRelayId ? '*' : ' '} ${item.name}  ${item.relayHost || '(未配置)'}:${item.relayPort}`),
               '',
               '优先在「插件 → DSH Web Control 远程控制」页面里修改。',
-              '用法: /webctl <host>[:<port>]   设置并重连',
+              '用法: /webctl <host>[:<port>]   设置当前中继并连接',
+              '      /webctl use <名称或ID>    切换到另一个中继',
               '      /webctl cwd <绝对路径>   设置新会话目录',
-              '      /webctl token <令牌>     设置中继插件令牌',
+              '      /webctl token <令牌>     设置当前中继的插件令牌',
               '      /webctl off              断开',
             ].join('\n'),
+          }
+        }
+        if (raw.startsWith('use ')) {
+          const key = raw.slice(4).trim()
+          if (!key) return { kind: 'error', text: '用法: /webctl use <名称或ID>' }
+          const target = config.relays.find(item => item.id === key || item.name === key)
+          if (!target) {
+            return {
+              kind: 'error',
+              text: `找不到中继「${key}」。可选: ${config.relays.map(item => item.name).join('、')}`,
+            }
+          }
+          Object.assign(config, { enabled: true, activeRelayId: target.id })
+          try {
+            await saveConfig(config)
+          } catch (error) {
+            return { kind: 'error', text: `保存配置失败: ${String(error)}` }
+          }
+          client.reconnect({ ...config })
+          return {
+            kind: 'success',
+            text: `已切换到「${target.name}」 ${target.relayHost || '(未配置)'}:${target.relayPort}，正在连接…`,
           }
         }
         if (raw.startsWith('cwd ')) {
@@ -1362,7 +1468,10 @@ export function apply(ctx) {
         }
         if (raw.startsWith('token ')) {
           const value = raw.slice(6).trim()
-          Object.assign(config, { enabled: true, pluginToken: value })
+          const relay = activeRelayOf(config)
+          if (!relay) return { kind: 'error', text: '请先配置一个中继' }
+          relay.pluginToken = value
+          Object.assign(config, { enabled: true })
           try {
             await saveConfig(config)
           } catch (error) {
@@ -1371,7 +1480,9 @@ export function apply(ctx) {
           client.reconnect({ ...config })
           return {
             kind: 'success',
-            text: value ? '插件令牌已保存，正在重连…' : '插件令牌已清除，正在重连…',
+            text: value
+              ? `「${relay.name}」的插件令牌已保存，正在重连…`
+              : `「${relay.name}」的插件令牌已清除，正在重连…`,
           }
         }
         if (raw === 'off') {
@@ -1396,17 +1507,20 @@ export function apply(ctx) {
           }
         }
         if (!host || !Number.isFinite(port) || port <= 0) port = DEFAULT_PORT
-        const next = { ...config, enabled: true, relayHost: host, relayPort: port }
+        const relay = activeRelayOf(config)
+        if (!relay) return { kind: 'error', text: '请先配置一个中继' }
+        relay.relayHost = host
+        relay.relayPort = port
+        Object.assign(config, { enabled: true })
         try {
-          await saveConfig(next)
+          await saveConfig(config)
         } catch (error) {
           return { kind: 'error', text: `保存配置失败: ${String(error)}` }
         }
-        Object.assign(config, next)
-        client.reconnect(next)
+        client.reconnect({ ...config })
         return {
           kind: 'success',
-          text: `DSH Web Control 已切换到 ${host}:${port}，正在连接…`,
+          text: `当前中继「${relay.name}」已设置为 ${host}:${port}，正在连接…`,
         }
       },
     }),
